@@ -1,0 +1,28 @@
+
+
+@alpaca_conn.on(r'^AM.AAPL$')
+async def on_minute_bars(conn, channel, bar):
+	if isinstance(candlesticks.df, pd.DataFrame):
+		ts = pd.to_datetime(bar.timestamp, unit='ms')
+		candlesticks.df.loc[ts] = [bar.open, bar.high, bar.low, bar.close, bar.volume]
+
+	if not trade_params['trade_taken']:
+		if bar.high > trade_params['high']:
+			trade_params['trade_taken'] = send_order('buy', bar)
+
+		elif bar.low < trade_params['low']:
+			trade_params['trade_taken'] = send_order('sell', bar)
+
+	if time_to_market_close() > 120:
+		wait_for_market_open()
+
+
+@alpaca_conn.on(r'^trade_updates$')
+async def on_trade_updates(conn, channel, trade):
+	if trade.order['order_type'] != 'market' and trade.order['filled_qty'] == '100':
+		# trade closed - look for new trade
+		trade_params = set_trade_params(candlesticks.df.AAPL)
+
+
+candlesticks = alpaca_api.get_barset('AAPL', 'minute', limit=10)
+trade_params = set_trade_params(candlesticks.df.AAPL)
